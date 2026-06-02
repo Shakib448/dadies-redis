@@ -3,6 +3,15 @@ name = "dadies"
 version = "0.1.0"
 edition = "2024"
 
+
+[[bin]]
+name = "dadies-cli"
+path = "src/bin/cli.rs"
+
+[[bin]]
+name = "dadies-server"
+path = "src/bin/server.rs"
+
 [dependencies]
 anyhow = "1.0.102"
 atoi = "2.0.0"

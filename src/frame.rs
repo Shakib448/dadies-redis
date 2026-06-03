@@ -46,11 +46,37 @@ impl Frame {
 
     pub fn check(src: &mut Cursor<&[u8]>) -> Result<(), Error> {
         match get_u8(src)? {
-            b'+' => Ok(()),
-            b'-' => Ok(()),
-            b':' => Ok(()),
-            b'$' => Ok(()),
-            b'*' => Ok(()),
+            b'+' => {
+                get_line(src)?;
+                Ok(())
+            }
+            b'-' => {
+                get_line(src)?;
+                Ok(())
+            }
+            b':' => {
+                let _ = get_decimal(src)?;
+                Ok(())
+            }
+            b'$' => {
+                if b'-' == peek_u8(src)? {
+                    let line = get_line(src)?;
+                    if line != b"-1" {
+                        return Err("protocol error: expected -1".into());
+                    }
+                    Ok(())
+                } else {
+                    let len: usize = get_decimal(src)?.try_into()?;
+                    skip(src, len + 2)
+                }
+            }
+            b'*' => {
+                let len = get_decimal(src)?;
+                for _ in 0..len {
+                    Self::check(src)?;
+                }
+                Ok(())
+            }
             actual => Err(format!("protocol error: unexpected first byte: {}", actual).into()),
         }
     }

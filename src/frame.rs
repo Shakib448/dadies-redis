@@ -5,6 +5,8 @@ use std::string::FromUtf8Error;
 
 use bytes::{Buf, Bytes};
 
+type CursorType = &mut Cursor<&[u8]>;
+
 #[derive(Clone, Debug)]
 pub enum Frame {
     Simple(String),
@@ -44,7 +46,7 @@ impl Frame {
         }
     }
 
-    pub fn check(src: &mut Cursor<&[u8]>) -> Result<(), Error> {
+    pub fn check(src: CursorType) -> Result<(), Error> {
         match get_u8(src)? {
             b'+' => {
                 get_line(src)?;
@@ -80,23 +82,79 @@ impl Frame {
             actual => Err(format!("protocol error: unexpected first byte: {}", actual).into()),
         }
     }
+
+    pub fn parse(src: CursorType) -> Result<Self, Error> {
+        match get_u8(src)? {
+            b'+' => {
+                let line = get_line(src)?.to_vec();
+                let string = String::from_utf8(line)?;
+                Ok(Self::Simple(string))
+            }
+            b'-' => {
+                let line = get_line(src)?.to_vec();
+                let string = String::from_utf8(line)?;
+                Ok(Self::Error(string))
+            }
+            b':' => {
+                let len = get_decimal(src)?;
+                Ok(Self::Integer(len))
+            }
+            b'$' => {
+                if b'-' == peek_u8(src)? {
+                    let line = get_line(src)?;
+
+                    if line != b"-1" {
+                        return Err("protocol error; invalid frame format".into());
+                    }
+
+                    Ok(Frame::Null)
+                } else {
+                    let len = get_decimal(src)?.try_into()?;
+                    let n = len + 2;
+
+                    if src.remaining() < n {
+                        return Err(Error::Incomplete);
+                    }
+
+                    let data = Bytes::copy_from_slice(&src.chunk()[..len]);
+
+                    skip(src, n)?;
+
+                    Ok(Frame::Bulk(data))
+                }
+            }
+            b'*' => {
+                let len = get_decimal(src)?.try_into()?;
+                let mut out = Vec::with_capacity(len);
+                for _ in 0..len {
+                    out.push(Self::parse(src)?);
+                }
+                Ok(Self::Array(out))
+            }
+            _ => unimplemented!(),
+        }
+    }
+
+    pub(crate) fn to_error(&self) -> crate::Error {
+        format!("unexpected frame: {self}").into()
+    }
 }
 
-fn peek_u8(src: &mut Cursor<&[u8]>) -> Result<u8, Error> {
+fn peek_u8(src: CursorType) -> Result<u8, Error> {
     if !src.has_remaining() {
         return Err(Error::Incomplete);
     }
     Ok(src.chunk()[0])
 }
 
-fn get_u8(src: &mut Cursor<&[u8]>) -> Result<u8, Error> {
+fn get_u8(src: CursorType) -> Result<u8, Error> {
     if !src.has_remaining() {
         return Err(Error::Incomplete);
     }
     Ok(src.get_u8())
 }
 
-fn skip(src: &mut Cursor<&[u8]>, n: usize) -> Result<(), Error> {
+fn skip(src: CursorType, n: usize) -> Result<(), Error> {
     if src.remaining() < n {
         return Err(Error::Incomplete);
     }
@@ -104,7 +162,7 @@ fn skip(src: &mut Cursor<&[u8]>, n: usize) -> Result<(), Error> {
     Ok(())
 }
 
-fn get_decimal(src: &mut Cursor<&[u8]>) -> Result<u64, Error> {
+fn get_decimal(src: CursorType) -> Result<u64, Error> {
     use atoi::atoi;
     let line = get_line(src)?;
     atoi::<u64>(line).ok_or_else(|| "protocol error: invalid decimal".into())

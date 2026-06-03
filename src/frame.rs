@@ -1,4 +1,7 @@
+use core::fmt;
 use std::io::Cursor;
+use std::num::TryFromIntError;
+use std::string::FromUtf8Error;
 
 use bytes::{Buf, Bytes};
 
@@ -92,4 +95,77 @@ fn get_line<'a>(src: &mut Cursor<&'a [u8]>) -> Result<&'a [u8], Error> {
     }
 
     Err(Error::Incomplete)
+}
+
+impl PartialEq<&str> for Frame {
+    fn eq(&self, other: &&str) -> bool {
+        match self {
+            Frame::Simple(s) => s.eq(other),
+            Frame::Bulk(s) => s.eq(other),
+            _ => false,
+        }
+    }
+}
+
+impl fmt::Display for Frame {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        use std::str;
+
+        match self {
+            Frame::Simple(response) => response.fmt(fmt),
+            Frame::Error(msg) => write!(fmt, "error: {msg}"),
+            Frame::Integer(num) => num.fmt(fmt),
+            Frame::Bulk(msg) => match str::from_utf8(msg) {
+                Ok(string) => string.fmt(fmt),
+                Err(_) => write!(fmt, "{msg:?}"),
+            },
+            Frame::Null => "(nil)".fmt(fmt),
+            Frame::Array(parts) => {
+                for (i, part) in parts.iter().enumerate() {
+                    if i > 0 {
+                        write!(fmt, " ")?;
+                    }
+
+                    part.fmt(fmt)?;
+                }
+
+                Ok(())
+            }
+        }
+    }
+}
+
+impl From<String> for Error {
+    fn from(src: String) -> Self {
+        Error::Other(src.into())
+    }
+}
+
+impl From<&str> for Error {
+    fn from(src: &str) -> Self {
+        Error::Other(src.into())
+    }
+}
+
+impl From<FromUtf8Error> for Error {
+    fn from(_src: FromUtf8Error) -> Self {
+        "protocol error; invalid frame format".into()
+    }
+}
+
+impl From<TryFromIntError> for Error {
+    fn from(_src: TryFromIntError) -> Self {
+        "protocol error; invalid frame format".into()
+    }
+}
+
+impl std::error::Error for Error {}
+
+impl std::fmt::Display for Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Error::Incomplete => "stream ended early".fmt(f),
+            Error::Other(err) => err.fmt(f),
+        }
+    }
 }

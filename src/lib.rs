@@ -1,3 +1,6 @@
+mod frame;
+mod parser;
+
 pub const DEFAULT_PORT: u16 = 5000;
 
 pub type Error = Box<dyn std::error::Error + Send + Sync>;

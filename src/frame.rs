@@ -1,11 +1,9 @@
-use core::fmt;
+use std::fmt;
 use std::io::Cursor;
 use std::num::TryFromIntError;
 use std::string::FromUtf8Error;
 
 use bytes::{Buf, Bytes};
-
-type CursorType = &mut Cursor<&[u8]>;
 
 #[derive(Clone, Debug)]
 pub enum Frame {
@@ -46,7 +44,7 @@ impl Frame {
         }
     }
 
-    pub fn check(src: CursorType) -> Result<(), Error> {
+    pub fn check(src: &mut Cursor<&[u8]>) -> Result<(), Error> {
         match get_u8(src)? {
             b'+' => {
                 get_line(src)?;
@@ -83,7 +81,7 @@ impl Frame {
         }
     }
 
-    pub fn parse(src: CursorType) -> Result<Self, Error> {
+    pub fn parse(src: &mut Cursor<&[u8]>) -> Result<Self, Error> {
         match get_u8(src)? {
             b'+' => {
                 let line = get_line(src)?.to_vec();
@@ -140,21 +138,21 @@ impl Frame {
     }
 }
 
-fn peek_u8(src: CursorType) -> Result<u8, Error> {
+fn peek_u8(src: &mut Cursor<&[u8]>) -> Result<u8, Error> {
     if !src.has_remaining() {
         return Err(Error::Incomplete);
     }
     Ok(src.chunk()[0])
 }
 
-fn get_u8(src: CursorType) -> Result<u8, Error> {
+fn get_u8(src: &mut Cursor<&[u8]>) -> Result<u8, Error> {
     if !src.has_remaining() {
         return Err(Error::Incomplete);
     }
     Ok(src.get_u8())
 }
 
-fn skip(src: CursorType, n: usize) -> Result<(), Error> {
+fn skip(src: &mut Cursor<&[u8]>, n: usize) -> Result<(), Error> {
     if src.remaining() < n {
         return Err(Error::Incomplete);
     }
@@ -162,7 +160,7 @@ fn skip(src: CursorType, n: usize) -> Result<(), Error> {
     Ok(())
 }
 
-fn get_decimal(src: CursorType) -> Result<u64, Error> {
+fn get_decimal(src: &mut Cursor<&[u8]>) -> Result<u64, Error> {
     use atoi::atoi;
     let line = get_line(src)?;
     atoi::<u64>(line).ok_or_else(|| "protocol error: invalid decimal".into())
@@ -171,11 +169,12 @@ fn get_decimal(src: CursorType) -> Result<u64, Error> {
 fn get_line<'a>(src: &mut Cursor<&'a [u8]>) -> Result<&'a [u8], Error> {
     let start = src.position() as usize;
     let end = src.get_ref().len() - 1;
-    let buf = src.get_ref();
 
-    if let Some(i) = (start..end).find(|&i| buf[i] == b'\r' && buf[i + 1] == b'\n') {
-        src.set_position((i + 2) as u64);
-        return Ok(&buf[start..i]);
+    for i in start..end {
+        if src.get_ref()[i] == b'\r' && src.get_ref()[i + 1] == b'\n' {
+            src.set_position((i + 2) as u64);
+            return Ok(&src.get_ref()[start..i]);
+        }
     }
 
     Err(Error::Incomplete)

@@ -1,5 +1,6 @@
 mod frame;
 mod parser;
+mod shutdown;
 
 pub use frame::Frame;
 pub use parser::Parse;

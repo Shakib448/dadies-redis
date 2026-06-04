@@ -28,4 +28,14 @@ impl Parse {
     fn next(&mut self) -> Result<Frame, ParseError> {
         self.parts.next().ok_or(ParseError::EndOfStream)
     }
+
+    pub(crate) fn next_string(&mut self) -> Result<String, ParseError> {
+        match self.next()? {
+            Frame::Simple(s) => Ok(s),
+            Frame::Bulk(data) => str::from_utf8(&data[..])
+                .map(|s| s.to_string())
+                .map_err(|_| "protocol error; invalid string".into()),
+            frame => Err(format!("protocol error; expected bulk string, got {frame:?}").into()),
+        }
+    }
 }

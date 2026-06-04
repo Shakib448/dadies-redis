@@ -1,9 +1,10 @@
+mod connection;
 mod frame;
 mod parser;
 mod shutdown;
 
 pub use frame::Frame;
-pub use parser::Parse;
+use parser::{Parse, ParseError};
 
 pub const DEFAULT_PORT: u16 = 5000;
 

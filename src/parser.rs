@@ -59,7 +59,7 @@ impl Parse {
         match self.next()? {
             Frame::Integer(v) => Ok(v),
             Frame::Simple(data) => atoi::<u64>(data.as_bytes()).ok_or_else(|| MSG.into()),
-            Frame::Bulk(data) => atoi::<u64>(&data.as_bytes()).ok_or_else(|| MSG.into()),
+            Frame::Bulk(data) => atoi::<u64>(&data).ok_or_else(|| MSG.into()),
             frame => Err(format!("protocol error; expected integer, got {frame:?}").into()),
         }
     }

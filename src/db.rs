@@ -5,7 +5,7 @@ use std::sync::{Arc, Mutex};
 use bytes::Bytes;
 use tokio::sync::{Notify, broadcast};
 use tokio::time::{self, Duration, Instant};
-use tracing::field::debug;
+use tracing::debug;
 
 use crate::shutdown;
 
@@ -140,8 +140,8 @@ impl Db {
     }
 
     fn shutdown_purge_task(&self) {
-        let mut sate = self.shared.state.lock().unwrap();
-        sate.shutdown = true;
+        let mut state = self.shared.state.lock().unwrap();
+        state.shutdown = true;
         drop(state);
         self.shared.background_task.notify_one();
     }
@@ -159,7 +159,7 @@ impl Shared {
 
         while let Some(&(when, ref key)) = state.expirations.iter().next() {
             if when > now {
-                return Some(When);
+                return Some(when);
             }
 
             state.entries.remove(key);

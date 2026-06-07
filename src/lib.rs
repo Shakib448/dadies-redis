@@ -1,4 +1,4 @@
-// pub mod clients;
+mod clients;
 // pub use clients::{BlockingClient, BufferedClient, Client};
 
 // pub mod cmd;

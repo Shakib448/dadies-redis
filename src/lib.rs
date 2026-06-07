@@ -1,8 +1,8 @@
 mod clients;
-// pub use clients::{BlockingClient, BufferedClient, Client};
+pub use clients::{BlockingClient, BufferedClient, Client};
 
-// pub mod cmd;
-// pub use cmd::Command;
+pub mod cmd;
+pub use cmd::Command;
 
 mod connection;
 pub use connection::Connection;

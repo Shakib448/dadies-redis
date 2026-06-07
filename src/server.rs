@@ -1,36 +1,36 @@
 use std::sync::Arc;
+use std::time::Duration;
 
-use anyhow::Ok;
-use tokio::net::TcpStream;
-use tokio::sync::{broadcast, mpsc, Semaphore}
-use tracing::{info, instrument};
+use tokio::net::{TcpListener, TcpStream};
+use tokio::sync::{Semaphore, broadcast, mpsc};
+use tokio::time;
+use tracing::{debug, error, info, instrument};
 
-use crate::{Connection, Db, DbDropGuard, Shutdown};
+use crate::{Command, Connection, Db, DbDropGuard, Shutdown};
 
 #[derive(Debug)]
 struct Listener {
     db_holder: DbDropGuard,
-    listener : TcpStream,
-    limit_connections : Arc<Semaphore>,
-    notify_shutdown : broadcast::Sender<()>,
+    listener: TcpListener,
+    limit_connections: Arc<Semaphore>,
+    notify_shutdown: broadcast::Sender<()>,
     shutdown_complete_tx: mpsc::Sender<()>,
 }
 #[derive(Debug)]
 struct Handler {
-    db :Db,
-    connection : Connection,
-    shutdown : Shutdown,
+    db: Db,
+    connection: Connection,
+    shutdown: Shutdown,
     _shutdown_complete: mpsc::Sender<()>,
 }
 
 const MAX_CONNECTIONS: usize = 250;
 
-
 pub async fn run(listener: TcpListener, shutdown: impl Future) {
     let (notify_shutdown, _) = broadcast::channel(1);
     let (shutdown_complete_tx, mut shutdown_complete_rx) = mpsc::channel(1);
 
-    let mut server = Listener{
+    let mut server = Listener {
         listener,
         db_holder: DbDropGuard::new(),
         limit_connections: Arc::new(Semaphore::new(MAX_CONNECTIONS)),
@@ -65,24 +65,28 @@ impl Listener {
         info!("accepting inbound connections");
 
         loop {
-            let permit = self.limit_connections.clone().acquire_owned().await.unwrap();
+            let permit = self
+                .limit_connections
+                .clone()
+                .acquire_owned()
+                .await
+                .unwrap();
 
             let socket = self.accept().await?;
 
             let mut handler = Handler {
                 db: self.db_holder.db(),
-                connection : Connection::new(socket),
-                shutdown : Shutdown::new(self.notify_shutdown.subscribe()),
+                connection: Connection::new(socket),
+                shutdown: Shutdown::new(self.notify_shutdown.subscribe()),
                 _shutdown_complete: self.shutdown_complete_tx.clone(),
             };
 
-            tokio::spwan(async move {
+            tokio::spawn(async move {
                 if let Err(err) = handler.run().await {
                     error!(cause = %err, "Error running handler");
                 }
                 drop(permit);
             });
-
         }
     }
 
@@ -94,7 +98,7 @@ impl Listener {
                 Ok((socket, _)) => return Ok(socket),
                 Err(err) => {
                     if backoff > 64 {
-                        return Err(err.into())
+                        return Err(err.into());
                     }
                 }
             }
@@ -105,9 +109,8 @@ impl Listener {
 }
 
 impl Handler {
-
     #[instrument(skip(self))]
-    async fn run(&mut self) -> crate::Result<() > {
+    async fn run(&mut self) -> crate::Result<()> {
         while !self.shutdown.is_shutdown() {
             let maybe_frame = tokio::select! {
                 res = self.connection.read_frame() => res?,
@@ -115,22 +118,19 @@ impl Handler {
                     return Ok(());
                 }
             };
-        let frame = match maybe_frame {
-            Some(frame) => frame,
-            None => return Ok(()),
-        };
+            let frame = match maybe_frame {
+                Some(frame) => frame,
+                None => return Ok(()),
+            };
 
-        let cmd = Command::from_frame(frame)?;
+            let cmd = Command::from_frame(frame)?;
 
+            debug!(?cmd);
 
-        debug!(?cmd);
-
-
-        cmd.apply(&self.db, &mut self.connection, &mut self.shutdown).await?;
-        };
+            cmd.apply(&self.db, &mut self.connection, &mut self.shutdown)
+                .await?;
+        }
 
         Ok(())
-
     }
-
 }

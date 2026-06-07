@@ -63,7 +63,7 @@ enum Command {
 }
 
 #[tokio::main(flavor = "current_thread")]
-async fn main() -> mini_redis::Result<()> {
+async fn main() -> dadies::Result<()> {
     tracing_subscriber::fmt::try_init()?;
 
     let cli = Cli::parse();

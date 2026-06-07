@@ -53,11 +53,11 @@ pub async fn run(listener: TcpListener, shutdown: impl Future) {
         shutdown_complete_tx,
         notify_shutdown,
         ..
-    };
+    } = server;
     drop(notify_shutdown);
     drop(shutdown_complete_tx);
 
-    let _ = shutdown_complete_tx.recv().await;
+    let _ = shutdown_complete_rx.recv().await;
 }
 
 impl Listener {
@@ -114,7 +114,7 @@ impl Handler {
         while !self.shutdown.is_shutdown() {
             let maybe_frame = tokio::select! {
                 res = self.connection.read_frame() => res?,
-                _ = self.shutdown.recv() => {
+                _ = self.shutdown.shutdown() => {
                     return Ok(());
                 }
             };

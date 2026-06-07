@@ -5,7 +5,7 @@ use tokio::net::TcpListener;
 use tokio::signal;
 
 #[tokio::main]
-pub async fn main() -> mini_redis::Result<()> {
+pub async fn main() -> dadies::Result<()> {
     set_up_logging()?;
 
     let cli = Cli::parse();
@@ -25,7 +25,7 @@ struct Cli {
     port: Option<u16>,
 }
 
-#[cfg(not(feature = "otel"))]
-fn set_up_logging() -> mini_redis::Result<()> {
+fn set_up_logging() -> dadies::Result<()> {
     tracing_subscriber::fmt::try_init()
+        .map_err(|e| e.into())
 }

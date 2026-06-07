@@ -146,7 +146,7 @@ impl Subscribe {
                         dst,
                     ).await?;
                 }
-                _ = shutdown.recv() => {
+                _ = shutdown.shutdown() => {
                     return Ok(());
                 }
             };

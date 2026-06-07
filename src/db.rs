@@ -1,13 +1,10 @@
 use std::collections::{BTreeSet, HashMap};
-use std::os::macos::raw::stat;
 use std::sync::{Arc, Mutex};
 
 use bytes::Bytes;
 use tokio::sync::{Notify, broadcast};
 use tokio::time::{self, Duration, Instant};
 use tracing::debug;
-
-use crate::shutdown;
 
 #[derive(Debug)]
 pub(crate) struct DbDropGuard {
